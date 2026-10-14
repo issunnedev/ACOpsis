@@ -14,7 +14,7 @@ AutoCognitive Opsis: a small family of AI models, run from one terminal app.
 | **Zeta 1.2** | Text-to-video with sound, Family Guy style (2–4 second clips) |
 | **ε-Epsilon** | Early demo |
 
-### Updates
+# Updates
 ## Zeta 1.2
 
 - **Sound:** every video gets matching sound effects automatically (MMAudio)
