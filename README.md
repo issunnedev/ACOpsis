@@ -75,11 +75,12 @@ Videos are saved in `zeta/outputs` and open automatically. For a browser page in
 2. Choose a option (atleast 1 run of gather is required for parser to be useful)
 
 ### ε-Epsilon Requirements:
-Nvidia GPU with Tensor cores and minimum 6GB VRAM (Tested on RTX 3060 Laptop GPU)
-16GB RAM DDR4/DDR5 (DDR3 or below may be too slow)
-Decently Fast SSD or HDD (NVMe SSD recommended)
-Moderate CPU
-Fast LAN/wLAN
+- ACOpsis Model 1 ζ-Zeta (w/ shared parent directory)
+- Nvidia GPU with Tensor cores and minimum 6GB VRAM (Tested on RTX 3060 Laptop GPU)
+- 16GB RAM DDR4/DDR5 (DDR3 or below may be too slow)
+- Decently Fast SSD or HDD (NVMe SSD recommended)
+- Moderate CPU
+- Fast LAN/wLAN (downloading)
 
 ## Tips
 
