@@ -39,7 +39,7 @@ AutoCognitive Opsis: a small family of AI models, run from one terminal app.
    It downloads about 23GB, so give it a while.
 3. Open a **new** terminal.
 
-## Use
+## Use ζ-Zeta
 
 ```
 acopsis                                   start ACOpsis
