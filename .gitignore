@@ -1,0 +1,15 @@
+.venv/
+.testenv/
+hf/
+sound/
+__pycache__/
+*.pyc
+zeta/outputs/
+zeta/runs/
+zeta/dataset/
+zeta/upload/
+zeta/review/
+zeta/models/zeta-v1/gpu_cache/
+zeta/models/*.pt
+*.mp4
+*.wav

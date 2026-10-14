@@ -1,0 +1,6 @@
+*.bat text eol=crlf
+*.cmd text eol=crlf
+bin/acopsis text eol=lf
+acopsis.py text eol=lf
+zeta/**/*.py text eol=lf
+*.safetensors binary

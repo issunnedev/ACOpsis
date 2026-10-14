@@ -1,0 +1,4 @@
+#!/bin/sh
+root="$(cd "$(dirname "$0")/.." && pwd)"
+[ -d "$root/hf" ] && export HF_HOME="$root/hf"
+exec "$root/.venv/Scripts/python.exe" "$root/acopsis.py" "$@"
