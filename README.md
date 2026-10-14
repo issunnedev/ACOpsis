@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="ACOpsisWhite.png">
+    <img src="ACOpsisBlack.png" alt="ACOpsis logo" width="180">
+  </picture>
+</p>
+
 # ACOpsis
 
 AutoCognitive Opsis: a small family of AI models, run from one terminal app.
