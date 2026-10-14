@@ -28,7 +28,7 @@ AutoCognitive Opsis: a small family of AI models, run from one terminal app.
 - About 35GB of free disk to install, 25GB after
 - Python 3.10–3.12 from [python.org](https://www.python.org/downloads/) (tick **Add python.exe to PATH**)
 
-## Install
+## Install ζ-Zeta
 
 1. Download this repo and double-click `install.bat`.
 2. Pick where to install, then install:
@@ -51,6 +51,19 @@ help                                      every command
 ```
 
 Videos are saved in `zeta/outputs` and open automatically. For a browser page instead, double-click `zeta/app/Zeta.bat`.
+
+## Install ε-Epsilon
+
+1. Open directory ε-Epsilon
+2. Open a terminal/Command line window
+3. run python3/python Manager.py to start the manager CLI
+4. select option 1 (setup)
+5. let setup run (~1-3GB required)
+
+## Using ε-Epsilon
+
+1. Start Manager.py using python in a terminal
+2. Choose a option (atleast 1 run of gather is required for parser to be useful)
 
 ## Tips
 
