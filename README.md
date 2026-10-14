@@ -28,14 +28,8 @@ AutoCognitive Opsis: a small family of AI models, run from one terminal app.
 
 # Info
 
-## Requirements
-
-- Windows with an NVIDIA GPU (6GB+ of video memory, RTX 30-series or newer)
-- 16GB of RAM (close other big apps while installing)
-- About 35GB of free disk to install, 25GB after
-- Python 3.10–3.12 from [python.org](https://www.python.org/downloads/) (tick **Add python.exe to PATH**)
-
-## Install ζ-Zeta
+## ζ-Zeta
+### Install ζ-Zeta
 
 1. Download this repo and double-click `install.bat`.
 2. Pick where to install, then install:
@@ -46,7 +40,7 @@ AutoCognitive Opsis: a small family of AI models, run from one terminal app.
    It downloads about 23GB, so give it a while.
 3. Open a **new** terminal.
 
-## Use ζ-Zeta
+### Use ζ-Zeta
 
 ```
 acopsis                                   start ACOpsis
@@ -59,7 +53,15 @@ help                                      every command
 
 Videos are saved in `zeta/outputs` and open automatically. For a browser page instead, double-click `zeta/app/Zeta.bat`.
 
-## Install ε-Epsilon
+### ζ-Zeta Requirements
+
+- Windows with an NVIDIA GPU (6GB+ of video memory, RTX 30-series or newer)
+- 16GB of RAM (close other big apps while installing)
+- About 35GB of free disk to install, 25GB after
+- Python 3.10–3.12 from [python.org](https://www.python.org/downloads/) (tick **Add python.exe to PATH**)
+
+## ε-Epsilon
+### Install ε-Epsilon
 
 1. Open directory ε-Epsilon
 2. Open a terminal/Command line window
@@ -67,10 +69,17 @@ Videos are saved in `zeta/outputs` and open automatically. For a browser page in
 4. select option 1 (setup)
 5. let setup run (~1-3GB required)
 
-## Using ε-Epsilon
+### Using ε-Epsilon
 
 1. Start Manager.py using python in a terminal
 2. Choose a option (atleast 1 run of gather is required for parser to be useful)
+
+### ε-Epsilon Requirements:
+Nvidia GPU with Tensor cores and minimum 6GB VRAM (Tested on RTX 3060 Laptop GPU)
+16GB RAM DDR4/DDR5 (DDR3 or below may be too slow)
+Decently Fast SSD or HDD (NVMe SSD recommended)
+Moderate CPU
+Fast LAN/wLAN
 
 ## Tips
 
