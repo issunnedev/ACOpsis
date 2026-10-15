@@ -13,7 +13,7 @@ GATHER_SCRIPT = PROJECT_DIR / "gather.py"
 
 DEPENDENCIES = [
     "requests",
-    "python-dotenv"
+    "python-dotenv",
     "yt-dlp",
 ]
 
