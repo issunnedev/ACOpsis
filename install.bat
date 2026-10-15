@@ -9,7 +9,7 @@ set "DEST=!SRC!"
 call :freespace
 echo.
 echo === ACOpsis installer ===
-echo Needs: Windows, an NVIDIA GPU (6GB+), 16GB RAM, Python 3.10-3.12, ~16GB free disk.
+echo Needs: Windows, an NVIDIA GPU (6GB+), 16GB RAM, 64-bit Python 3.10-3.14, ~35GB free disk.
 echo.
 echo   Install location: !DEST!   (!FREE! GB free)
 echo.
@@ -44,7 +44,6 @@ if not exist "!NEWDEST:~0,3!" (
     echo Drive !NEWDEST:~0,2! doesn't exist.
     goto menu
 )
-rem Install into an ACOpsis folder inside the chosen one, unless it already is one.
 if /i not "!NEWDEST:~-7!"=="ACOpsis" set "NEWDEST=!NEWDEST!\ACOpsis"
 set "DEST=!NEWDEST!"
 goto menu
@@ -55,14 +54,22 @@ for /f %%f in ('powershell -NoProfile -Command "[math]::Floor((Get-PSDrive '!DES
 exit /b 0
 
 :install
-where py >nul 2>nul && (set "PY=py -3") || (set "PY=python")
-%PY% --version >nul 2>nul
-if errorlevel 1 (
-    echo Python wasn't found. Install Python 3.12 from https://www.python.org/downloads/
-    echo and tick "Add python.exe to PATH" during setup, then run this again.
+set "PY="
+set "CHECK=!SRC!\shared\pycheck.py"
+for %%V in (3.12 3.13 3.11 3.10 3.14) do if not defined PY py -%%V "!CHECK!" >nul 2>nul && set "PY=py -%%V"
+if not defined PY python "!CHECK!" >nul 2>nul && set "PY=python"
+if not defined PY (
+    echo.
+    echo No supported Python was found. PyTorch needs 64-bit Python 3.10 to 3.14 on an Intel or AMD PC.
+    echo What this PC has:
+    python "!CHECK!" 2>nul || py "!CHECK!" 2>nul || echo   no Python at all
+    echo.
+    echo Install Python 3.12 from https://www.python.org/downloads/release/python-31210/
+    echo ^(the "Windows installer ^(64-bit^)" link^) and tick "Add python.exe to PATH", then run this again.
     pause
     exit /b 1
 )
+echo Using !PY!
 
 if /i not "!DEST!"=="!SRC!" (
     echo Copying ACOpsis to !DEST!...
@@ -72,18 +79,29 @@ if /i not "!DEST!"=="!SRC!" (
 cd /d "!DEST!"
 set "VPY=!DEST!\.venv\Scripts\python.exe"
 
+if exist "!VPY!" (
+    "!VPY!" "!DEST!\shared\pycheck.py" >nul 2>nul
+    if errorlevel 1 (
+        echo Removing an old Python environment made with an unsupported Python...
+        rmdir /s /q "!DEST!\.venv"
+    )
+)
 if not exist "!VPY!" (
-    echo [1/4] creating Python environment...
-    %PY% -m venv "!DEST!\.venv"
+    echo [1/5] creating Python environment...
+    !PY! -m venv "!DEST!\.venv"
     if errorlevel 1 goto fail
 )
 
-echo [2/4] installing PyTorch and libraries - about 3GB, this takes a while...
+echo [2/5] installing PyTorch and libraries - about 3GB, this takes a while...
 "!VPY!" -m pip install -q --upgrade pip
 if errorlevel 1 goto fail
-"!VPY!" -m pip install -q torch --index-url https://download.pytorch.org/whl/cu128
+"!VPY!" -m pip install -q torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 if errorlevel 1 goto fail
 "!VPY!" -m pip install -q diffusers peft transformers accelerate sentencepiece protobuf safetensors gradio imageio imageio-ffmpeg huggingface_hub psutil
+if errorlevel 1 goto fail
+"!VPY!" -m pip install -q av einops open_clip_torch timm colorlog librosa torchdiffeq omegaconf requests
+if errorlevel 1 goto fail
+"!VPY!" -m pip install -q --no-deps "mmaudio @ https://github.com/hkchengrex/MMAudio/archive/refs/heads/main.zip"
 if errorlevel 1 goto fail
 "!VPY!" -c "import sys, torch; ok = torch.cuda.is_available(); print('GPU:', torch.cuda.get_device_name() if ok else 'none found'); sys.exit(0 if ok else 2)"
 if errorlevel 2 (
@@ -92,13 +110,17 @@ if errorlevel 2 (
     exit /b 1
 )
 
-echo [3/4] downloading models - about 10GB...
+echo [3/5] downloading video models - about 10GB...
 set "HF_HOME=!DEST!\hf"
 set "HF_HUB_DISABLE_XET=1"
 "!VPY!" "!DEST!\zeta\app\download_models.py"
 if errorlevel 1 goto fail
 
-echo [4/4] adding the 'acopsis' command...
+echo [4/5] downloading and preparing sound models - about 10GB down, 5GB kept...
+"!VPY!" "!DEST!\shared\foley.py" prepare
+if errorlevel 1 goto fail
+
+echo [5/5] adding the 'acopsis' command...
 powershell -NoProfile -Command "$b = '!DEST!\bin'; $p = [Environment]::GetEnvironmentVariable('Path', 'User'); if (($p -split ';') -notcontains $b) { [Environment]::SetEnvironmentVariable('Path', ($p.TrimEnd(';') + ';' + $b), 'User') }"
 
 echo.
