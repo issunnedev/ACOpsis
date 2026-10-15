@@ -50,28 +50,7 @@ LENGTHS = {"2": 49, "3": 73, "4": 97}
 
 EPSILON = ROOT / "ε-Epsilon" / "Manager.py"
 
-class Shell:
-    def cmd_epsilon(self, args):
-        if not EPSILON.is_file():
-            print(f"Epsilon manager not found: {EPSILON}")
-            return
-
-        if "zeta" in self.loaded:
-            self.cmd_unload([])
-
-        print("Starting Epsilon manager...")
-
-        try:
-            subprocess.run(
-                [sys.executable, str(EPSILON), *args],
-                cwd=str(EPSILON.parent),
-                check=False,
-            )
-        except KeyboardInterrupt:
-            print("\nEpsilon stopped.")
-        except OSError as e:
-            print(f"Couldn't start Epsilon: {e}")
-            
+class Shell: 
     def __init__(self):
         self.loaded = {}        # name -> model
         self.current = None
