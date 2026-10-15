@@ -9,7 +9,7 @@ import torch
 
 from bundle import load_bundle, save_bundle
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[1]
 SOUND = ROOT / "sound"
 MODEL = "large_44k_v2"
 CLIP_REPO = "apple/DFN5B-CLIP-ViT-H-14-384"

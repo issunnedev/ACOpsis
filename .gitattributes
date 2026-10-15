@@ -4,3 +4,5 @@ bin/acopsis text eol=lf
 acopsis.py text eol=lf
 zeta/**/*.py text eol=lf
 *.safetensors binary
+shared/*.py text eol=lf
+omega/**/*.py text eol=lf
