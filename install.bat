@@ -9,7 +9,7 @@ set "DEST=!SRC!"
 call :freespace
 echo.
 echo === ACOpsis installer ===
-echo Needs: Windows, an NVIDIA GPU (6GB+), 16GB RAM, Python 3.10-3.12, ~35GB free disk.
+echo Needs: Windows, an NVIDIA GPU (6GB+), 16GB RAM, 64-bit Python 3.10-3.14, ~35GB free disk.
 echo.
 echo   Install location: !DEST!   (!FREE! GB free)
 echo.
@@ -54,14 +54,22 @@ for /f %%f in ('powershell -NoProfile -Command "[math]::Floor((Get-PSDrive '!DES
 exit /b 0
 
 :install
-where py >nul 2>nul && (set "PY=py -3") || (set "PY=python")
-%PY% --version >nul 2>nul
-if errorlevel 1 (
-    echo Python wasn't found. Install Python 3.12 from https://www.python.org/downloads/
-    echo and tick "Add python.exe to PATH" during setup, then run this again.
+set "PY="
+set "CHECK=!SRC!\shared\pycheck.py"
+for %%V in (3.12 3.13 3.11 3.10 3.14) do if not defined PY py -%%V "!CHECK!" >nul 2>nul && set "PY=py -%%V"
+if not defined PY python "!CHECK!" >nul 2>nul && set "PY=python"
+if not defined PY (
+    echo.
+    echo No supported Python was found. PyTorch needs 64-bit Python 3.10 to 3.14 on an Intel or AMD PC.
+    echo What this PC has:
+    python "!CHECK!" 2>nul || py "!CHECK!" 2>nul || echo   no Python at all
+    echo.
+    echo Install Python 3.12 from https://www.python.org/downloads/release/python-31210/
+    echo ^(the "Windows installer ^(64-bit^)" link^) and tick "Add python.exe to PATH", then run this again.
     pause
     exit /b 1
 )
+echo Using !PY!
 
 if /i not "!DEST!"=="!SRC!" (
     echo Copying ACOpsis to !DEST!...
@@ -71,9 +79,16 @@ if /i not "!DEST!"=="!SRC!" (
 cd /d "!DEST!"
 set "VPY=!DEST!\.venv\Scripts\python.exe"
 
+if exist "!VPY!" (
+    "!VPY!" "!DEST!\shared\pycheck.py" >nul 2>nul
+    if errorlevel 1 (
+        echo Removing an old Python environment made with an unsupported Python...
+        rmdir /s /q "!DEST!\.venv"
+    )
+)
 if not exist "!VPY!" (
     echo [1/5] creating Python environment...
-    %PY% -m venv "!DEST!\.venv"
+    !PY! -m venv "!DEST!\.venv"
     if errorlevel 1 goto fail
 )
 
