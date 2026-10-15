@@ -13,7 +13,7 @@ AutoCognitive Opsis: a small family of AI models, run from one terminal app.
 |---|---|
 | **ω-Omega 1.0** | High-quality text-to-video with sound and a built-in prompt enhancer (2–5 second clips, up to 720p) |
 | **ζ-Zeta 1.2** | Text-to-video with sound, Family Guy style (2–4 second clips) |
-| **ε-Epsilon** | Early demo |
+| **ε-Epsilon** | ~Early tech demo~ |
 
 # Updates
 ## Omega 1.0
@@ -29,10 +29,12 @@ AutoCognitive Opsis: a small family of AI models, run from one terminal app.
 - **`--smooth`:** interpolates to 48fps so motion is less choppy
 - **`--hd`:** upscales to 1024×576 for sharing
 - Runs on a 6GB laptop GPU with 16GB of RAM
-## Epsilon E0.1
+## Epsilon E2
 
-- Added full CLI manager interface
-- Added Youtube fetching and downloading scripts
+- Added updated parser
+- Configured ACOpsis shell to integrate
+- Configured new CLI update
+
 ## Installer
 
 - Picks a supported Python automatically and explains what to install if there isn't one (Python 3.15 isn't supported by PyTorch yet)
