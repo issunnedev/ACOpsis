@@ -11,10 +11,18 @@ AutoCognitive Opsis: a small family of AI models, run from one terminal app.
 
 | Model | What it does |
 |---|---|
-| **Zeta 1.2** | Text-to-video with sound, Family Guy style (2–4 second clips) |
+| **ω-Omega 1.0** | High-quality text-to-video with sound and a built-in prompt enhancer (2–5 second clips, up to 720p) |
+| **ζ-Zeta 1.2** | Text-to-video with sound, Family Guy style (2–4 second clips) |
 | **ε-Epsilon** | Early demo |
 
 # Updates
+## Omega 1.0
+
+- New model: built on **FastWan 2.2** (Wan 2.2 5B, distilled to 3 steps), no training involved
+- **Prompt enhancer:** a local Qwen2.5-3B rewrites short prompts into detailed ones (`--raw` to skip)
+- **Sound:** matching sound effects, same engine as Zeta
+- **`--res 480|720`**, **`--length 2|3|5`**, and **`--best`** for the full-quality decoder
+- Runs on a 6GB laptop GPU by streaming the model from disk
 ## Zeta 1.2
 
 - **Sound:** every video gets matching sound effects automatically (MMAudio)
@@ -25,6 +33,9 @@ AutoCognitive Opsis: a small family of AI models, run from one terminal app.
 
 - Added full CLI manager interface
 - Added Youtube fetching and downloading scripts
+## Installer
+
+- Picks a supported Python automatically and explains what to install if there isn't one (Python 3.15 isn't supported by PyTorch yet)
 
 # Info
 
@@ -39,6 +50,8 @@ AutoCognitive Opsis: a small family of AI models, run from one terminal app.
    ```
    It downloads about 23GB, so give it a while.
 3. Open a **new** terminal.
+
+If the installer says no supported Python was found, install [Python 3.12](https://www.python.org/downloads/release/python-31210/) and run `install.bat` again. It removes any broken environment from a previous attempt by itself.
 
 ### Use ζ-Zeta
 
@@ -55,10 +68,41 @@ Videos are saved in `zeta/outputs` and open automatically. For a browser page in
 
 ### ζ-Zeta Requirements
 
-- Windows with an NVIDIA GPU (6GB+ of video memory, RTX 30-series or newer)
+- Windows on an Intel or AMD PC with an NVIDIA GPU (6GB+ of video memory, RTX 30-series or newer)
 - 16GB of RAM (close other big apps while installing)
 - About 35GB of free disk to install, 25GB after
-- Python 3.10–3.12 from [python.org](https://www.python.org/downloads/) (tick **Add python.exe to PATH**)
+- **64-bit Python 3.10–3.14** from [python.org](https://www.python.org/downloads/release/python-31210/) (3.12 recommended, tick **Add python.exe to PATH**)
+
+## ω-Omega
+### Install ω-Omega
+
+1. Install ζ-Zeta first (Omega uses the same app and installer).
+2. Open a terminal, type `acopsis`, then:
+   ```
+   setup omega
+   ```
+   It downloads about 30GB and keeps about 16GB of working files.
+
+### Use ω-Omega
+
+```
+omega prompt "a cat surfing a wave at sunset"    720p, 5 seconds, with sound (about 2½ minutes)
+omega prompt "..." --res 480 --length 2          quick version (about 1 minute)
+omega prompt "..." --raw                         use your prompt as-is, skip the enhancer
+omega prompt "..." --best                        full-quality decoder (slower)
+omega prompt "..." --silent --smooth             no sound, smoother motion
+```
+
+After each video, ACOpsis prints the expanded prompt the enhancer wrote. Videos are saved in `omega/outputs`.
+
+### ω-Omega Requirements
+
+- Everything ζ-Zeta needs
+- About 45GB more free disk (30GB of downloads, which can go on another drive, plus 16GB of working files)
+
+### Storage
+
+Big downloads go next to ACOpsis by default. To put them on another drive, write its path (e.g. `D:\ACOpsis`) into a file called `storage.txt` in the ACOpsis folder. Omega's working files are read on every video, so they stay on the fastest drive; to move them too, write the path into `fast_storage.txt`.
 
 ## ε-Epsilon
 ### Install ε-Epsilon
@@ -71,7 +115,7 @@ Videos are saved in `zeta/outputs` and open automatically. For a browser page in
 
 ### Using ε-Epsilon
 
-1. Start Manager.py using python in a terminal
+1. Start Manager.py using python in a terminal (or type `epsilon` inside `acopsis`)
 2. Choose a option (atleast 1 run of gather is required for parser to be useful)
 
 ### ε-Epsilon Requirements:
@@ -87,6 +131,7 @@ Videos are saved in `zeta/outputs` and open automatically. For a browser page in
 - Simple scenes (people sitting, talking, standing) look best.
 - Describe how characters look, not just their names. Zeta mixes them up.
 - Talking scenes get babble, not real words. The sound model makes effects, not speech.
+- Omega follows detailed prompts best; the enhancer handles that for you unless you use `--raw`.
 
 ## Training Zeta
 
@@ -94,4 +139,4 @@ Videos are saved in `zeta/outputs` and open automatically. For a browser page in
 
 ## Licenses
 
-The MMAudio sound model's weights are licensed for non-commercial use only.
+Two parts are licensed for non-commercial use only: the MMAudio sound model's weights and Omega's Qwen2.5-3B prompt enhancer (Qwen Research License). FastWan 2.2 is Apache 2.0 and the TAEHV decoder is MIT.

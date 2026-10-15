@@ -102,7 +102,7 @@ set "HF_HUB_DISABLE_XET=1"
 if errorlevel 1 goto fail
 
 echo [4/5] downloading and preparing sound models - about 10GB down, 5GB kept...
-"!VPY!" "!DEST!\zeta\app\foley.py" prepare
+"!VPY!" "!DEST!\shared\foley.py" prepare
 if errorlevel 1 goto fail
 
 echo [5/5] adding the 'acopsis' command...

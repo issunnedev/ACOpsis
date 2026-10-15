@@ -13,3 +13,6 @@ zeta/models/zeta-v1/gpu_cache/
 zeta/models/*.pt
 *.mp4
 *.wav
+storage.txt
+omega/outputs/
+omega/models/
