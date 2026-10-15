@@ -1,3 +1,10 @@
+"""ACOpsis - command-line home for the ACOpsis models.
+
+    acopsis                                   start the interactive prompt
+    acopsis zeta prompt "Peter on the couch"  run one command and exit
+
+Inside the prompt: `help` lists every command.
+"""
 import logging
 import os
 import shlex
@@ -5,6 +12,7 @@ import sys
 import time
 import warnings
 from pathlib import Path
+import subprocess
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "zeta" / "app"))
@@ -18,19 +26,19 @@ warnings.filterwarnings("ignore")
 logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
 
 MODELS = {
-    "zeta": "Zeta 1.2 - text-to-video with sound, Family Guy style. 2-4 second clips, ~1 min each.",
+    "zeta": "text-to-video, Family Guy style. 2-4 second clips, about 40s each.",
+    "Epsilon": "Zeta fork with optimization, YouTube fetch, and 4K resolution",
+    "Omega": "More powerful and resource-demanding fork of Zeta",
 }
 HELP = """\
 commands:
   models                          list the models
   model <name>                    load a model (e.g. model zeta)
-  zeta prompt "<text>"            make a video (with sound)
+  epsilon                         Start epsilon internal manager
+  zeta prompt "<text>"            make a video
       options: --length 2|3|4     seconds (default 3)
                --steps N          10-50, fewer = faster but rougher (default 40)
                --seed N           reuse a seed to remake or vary a video
-               --silent           skip the sound (saves ~15s)
-               --smooth           interpolate to 48fps, less choppy
-               --hd               upscale to 1024x576 for sharing
   again                           re-run the last prompt with a new seed
   open                            play the last video
   videos                          open the videos folder
@@ -40,14 +48,37 @@ commands:
 
 LENGTHS = {"2": 49, "3": 73, "4": 97}
 
+EPSILON = ROOT / "ε-Epsilon" / "Manager.py"
 
 class Shell:
+    def cmd_epsilon(self, args):
+        if not EPSILON.is_file():
+            print(f"Epsilon manager not found: {EPSILON}")
+            return
+
+        if "zeta" in self.loaded:
+            self.cmd_unload([])
+
+        print("Starting Epsilon manager...")
+
+        try:
+            subprocess.run(
+                [sys.executable, str(EPSILON), *args],
+                cwd=str(EPSILON.parent),
+                check=False,
+            )
+        except KeyboardInterrupt:
+            print("\nEpsilon stopped.")
+        except OSError as e:
+            print(f"Couldn't start Epsilon: {e}")
+            
     def __init__(self):
-        self.loaded = {}
+        self.loaded = {}        # name -> model
         self.current = None
         self.last_video = None
         self.last_args = None
 
+    # ---- commands -------------------------------------------------------
     def cmd_help(self, args):
         print(HELP)
 
@@ -62,6 +93,25 @@ class Shell:
             print(f"usage: model <name>   (models: {', '.join(MODELS)})")
             return
         self.load(args[0])
+
+
+        if "zeta" in self.loaded:
+            self.cmd_unload([])
+
+        import subprocess
+
+        print("Starting Epsilon manager...")
+
+        try:
+            subprocess.run(
+                [sys.executable, str(EPSILON), *args],
+                cwd=str(EPSILON.parent),
+                check=False,
+            )
+        except KeyboardInterrupt:
+            print("\nEpsilon stopped.")
+        except OSError as e:
+            print(f"Couldn't start Epsilon: {e}")
 
     def cmd_unload(self, args):
         if not self.loaded:
@@ -113,14 +163,10 @@ class Shell:
             bar = "#" * (done * 24 // steps) + "-" * (24 - done * 24 // steps)
             print(f"\r  generating [{bar}] {done}/{steps}", end="", flush=True)
 
-        def stage(msg):
-            print(f"\r  {msg}..." + " " * 30, end="", flush=True)
-
         print("  reading prompt...", end="", flush=True)
         try:
-            path, seed = zeta.generate(text, LENGTHS[opts["length"]], steps, seed=opts["seed"],
-                                       progress=progress, stage=stage, sound=not opts["silent"],
-                                       smooth=opts["smooth"], hd=opts["hd"])
+            path, seed = zeta.generate(text, LENGTHS[opts["length"]], steps,
+                                       seed=opts["seed"], progress=progress)
         except KeyboardInterrupt:
             print("\n  cancelled")
             return
@@ -128,6 +174,7 @@ class Shell:
         self.last_video = path
         os.startfile(path)
 
+    # ---- plumbing -------------------------------------------------------
     def load(self, name):
         if name in self.loaded:
             self.current = name
@@ -136,7 +183,7 @@ class Shell:
         start = time.time()
         try:
             import zeta_app
-            if zeta_app.models_cached():
+            if zeta_app.models_cached():   # skip the Hub; otherwise let it download what's missing
                 os.environ.setdefault("HF_HUB_OFFLINE", "1")
             self.loaded[name] = zeta_app.Zeta()
         except Exception as e:
@@ -177,14 +224,11 @@ class Shell:
 
 
 def _parse_prompt(tokens):
-    opts = {"length": "3", "steps": 40, "seed": None, "silent": False, "smooth": False, "hd": False}
+    opts = {"length": "3", "steps": 40, "seed": None}
     words, i = [], 0
     while i < len(tokens):
         t = tokens[i]
-        if t in ("--silent", "--smooth", "--hd"):
-            opts[t[2:]] = True
-            i += 1
-        elif t in ("--length", "--steps", "--seed"):
+        if t in ("--length", "--steps", "--seed"):
             if i + 1 >= len(tokens):
                 raise ValueError(f"{t} needs a value")
             val = tokens[i + 1]
