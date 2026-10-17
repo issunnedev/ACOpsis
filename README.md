@@ -32,8 +32,8 @@ AutoCognitive Opsis: a small family of AI models, run from one terminal app.
 ## Epsilon E2
 
 - Added updated parser
-- Configured ACOpsis shell to integrate
-- Configured new CLI update
+- Configured ACOpsis shell to integrate (may not work)
+- Configured new CLI update (has issues now that I notice)
 
 ## Installer
 
@@ -119,8 +119,8 @@ Big downloads go next to ACOpsis by default. To put them on another drive, write
 
 ### Using ε-Epsilon
 
-1. Start Manager.py using python in a terminal (or type `epsilon` inside `acopsis`)
-2. Choose a option (atleast 1 run of gather is required for parser to be useful)
+1. Start Manager.py (inside ε-Epsilon inside the ACOpsis root) using python in a terminal (or type `epsilon` inside `acopsis` shell)
+2. Choose a option (at-least 1 run of gather is required for parser to be useful)
 
 ### ε-Epsilon Requirements:
 - ACOpsis Model 1 ζ-Zeta (w/ shared parent directory)
@@ -132,6 +132,7 @@ Big downloads go next to ACOpsis by default. To put them on another drive, write
 
 ## Tips
 
+### ζ-Zeta
 - Simple scenes (people sitting, talking, standing) look best.
 - Describe how characters look, not just their names. Zeta mixes them up.
 - Talking scenes get babble, not real words. The sound model makes effects, not speech.
@@ -144,3 +145,6 @@ Big downloads go next to ACOpsis by default. To put them on another drive, write
 ## Licenses
 
 Two parts are licensed for non-commercial use only: the MMAudio sound model's weights and Omega's Qwen2.5-3B prompt enhancer (Qwen Research License). FastWan 2.2 is Apache 2.0 and the TAEHV decoder is MIT.
+
+### Extra
+REPORT ALL BUGS/ISSUES
