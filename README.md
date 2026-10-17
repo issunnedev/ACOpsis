@@ -13,7 +13,7 @@ AutoCognitive Opsis: a small family of AI models, run from one terminal app.
 |---|---|
 | **ω-Omega 1.0** | High-quality text-to-video with sound and a built-in prompt enhancer (2–5 second clips, up to 720p) |
 | **ζ-Zeta 1.2** | Text-to-video with sound, Family Guy style (2–4 second clips) |
-| **ε-Epsilon E2** | ~Early tech demo~ |
+| **ε-Epsilon E2** | ~Early tech demo~ MESS with many bugs and no functional model (yet) |
 
 # Updates
 ## Omega 1.0
