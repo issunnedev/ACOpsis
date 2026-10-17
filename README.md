@@ -39,7 +39,9 @@ AutoCognitive Opsis: a small family of AI models, run from one terminal app.
 
 - Picks a supported Python automatically and explains what to install if there isn't one (Python 3.15 isn't supported by PyTorch yet)
 
-# Info
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+# Models
 
 ## ζ-Zeta
 ### Install ζ-Zeta
