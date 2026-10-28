@@ -131,6 +131,14 @@ Big downloads go next to ACOpsis by default. To put them on another drive, write
 - Moderate CPU
 - Fast LAN/wLAN (downloading)
 
+## δ-delta
+### Install δ-delta
+
+Delta is mostly self contained inside the 2 required python scripts but when training for the first time with a new model it **DOES** download the entire model (of your choosing) onto your computer (however much storage is used is dependent on you and exclusively you, do not blame us for any storage issues related to δ-delta)
+
+### Using δ-delta
+
+
 ## Tips
 
 ### ζ-Zeta
