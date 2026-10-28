@@ -35,6 +35,9 @@ AutoCognitive Opsis: a small family of AI models, run from one terminal app.
 - Added updated parser
 - Configured ACOpsis shell to integrate (may not work)
 - Configured new CLI update (has issues now that I notice)
+## Delta Alpha 0.1
+
+- Added new model Delta (usage instructions near bottom)
 
 ## Installer
 
@@ -136,10 +139,44 @@ Big downloads go next to ACOpsis by default. To put them on another drive, write
 
 Delta is mostly self contained inside the 2 required python scripts but when training for the first time with a new model it **DOES** download the entire model (of your choosing) onto your computer (however much storage is used is dependent on you and exclusively you, do not blame us for any storage issues related to δ-delta)
 
+Aside from that delta only requires the dependent python libraries
+```
+python -m pip install requests beautifulsoup4 urllib3 rich
+```
+
 ### Using δ-delta
 
+To use Delta you first need to gather data from 4Chan as that is where it gathers most of the data, to do this run:
+```
+python train.py collect --boards <boards> --max-threads <max_threads>
+```
+After that is finished run
+```
+python train.py train
+```
+This trains the default settings (pythia 160M Parameter) You can also use public models on a HF repository via
+```
+python train.py train --model <HF link>
+```
+This usually requires
+```
+---trust-remote-code
+```
+After the model is trained it should be fully functional and ready to use, you can run the model in multiple ways:
+```
+python train.py generate --prompt "<prompt"
+```
+or
+```
+python train.py generate -i 
+```
+adding
+```
+-i
+```
+allows for a chatbot style shell
 
-## Tips
+## Tips and info
 
 ### ζ-Zeta
 - Simple scenes (people sitting, talking, standing) look best.
@@ -156,4 +193,5 @@ Delta is mostly self contained inside the 2 required python scripts but when tra
 Two parts are licensed for non-commercial use only: the MMAudio sound model's weights and Omega's Qwen2.5-3B prompt enhancer (Qwen Research License). FastWan 2.2 is Apache 2.0 and the TAEHV decoder is MIT.
 
 ### Extra
-REPORT ALL BUGS/ISSUES
+**REPORT ALL BUGS/ISSUES** It really does help. These are really experimental
+ 
