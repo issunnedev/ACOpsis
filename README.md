@@ -184,6 +184,9 @@ allows for a chatbot style shell
 - Talking scenes get babble, not real words. The sound model makes effects, not speech.
 - Omega follows detailed prompts best; the enhancer handles that for you unless you use `--raw`.
 
+### δ-delta
+- Beautiful soup error happens, ignore it. No clue why... If someone knows how to fix it PLEASE put in a pull request to fix it
+  
 ## Training Zeta
 
 `zeta/prep_dataset.py` cuts a source video into 3-second clips, `zeta/captions.json` holds their captions, and `zeta/kaggle/train_zeta.py` trains the LoRA on a free Kaggle T4 (about 3 hours). The training clips themselves aren't included.
