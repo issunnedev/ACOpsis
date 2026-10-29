@@ -14,7 +14,7 @@ AutoCognitive Opsis: a small family of AI models, run from one terminal app.
 | **ω-Omega 1.0** | High-quality text-to-video with sound and a built-in prompt enhancer (2–5 second clips, up to 720p) |
 | **ζ-Zeta 1.2** | Text-to-video with sound, Family Guy style (2–4 second clips) |
 | **ε-Epsilon E2** | ~Early tech demo~ MESS with many bugs and no functional model (yet) **NOTE! Currently on developmental pause** |
-| **δ-delta Alpha 0.1** | Highly customizable LM trained exclusively off 4Chan and basic English |
+| **δ-delta Alpha A2** | Highly customizable LM trained exclusively off 4Chan and basic English |
 
 # Updates
 ## Omega 1.0
@@ -35,9 +35,12 @@ AutoCognitive Opsis: a small family of AI models, run from one terminal app.
 - Added updated parser
 - Configured ACOpsis shell to integrate (may not work)
 - Configured new CLI update (has issues now that I notice)
-## Delta Alpha 0.1
+## Delta Alpha 2 "A2"
 
-- Added new model Delta (usage instructions near bottom)
+- Added PyQt6 Based GUI
+- Refined main script
+- more functions
+- QoL
 
 ## Installer
 
