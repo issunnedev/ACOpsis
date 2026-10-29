@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 """
-ACOpsis: collect a small forum corpus and train a tiny GPT-NeoX model from scratch.
+ACOpsis DELTA: a small language model trained on general English plus 4chan.
 
-    python train.py collect --boards g sci --max-threads 10
-    python train.py train   --epochs 3
+    python train.py                                  # open the GUI (needs PyQt6)
+    python train.py gui                              # same
+    python train.py collect --boards g sci --max-threads 20
+    python train.py train --epochs 1
+    python train.py train --dry-run                  # preview config + memory, no training
+    python train.py train --model <HF repo> [--trust-remote-code] [--eos-token "<|end_of_text|>"]
     python train.py generate --prompt "The problem with"
-    python train.py generate -i          # interactive prompt loop
-    python train.py stats                # corpus summary
-    python train.py train --dry-run      # preview config + memory, no training
+    python train.py generate -i                      # interactive prompt shell
+    python train.py stats                            # corpus summary
+    python train.py doctor                           # check Python / torch / GPU setup
 
 Dependencies:  pip install requests beautifulsoup4 numpy torch transformers datasets rich
+GUI:           pip install PyQt6
 (`rich` is optional; without it you get plain output.)
 """
 
@@ -17,10 +22,15 @@ from __future__ import annotations
 
 import argparse
 import inspect
+import itertools
 import json
 import math
+import os
+import platform
 import random
 import re
+import shutil
+import sys
 import time
 from collections import Counter
 from contextlib import contextmanager
@@ -76,39 +86,81 @@ QUOTE_RE = re.compile(r"(?<!>)>>(\d+)(?:\s*\((?:OP|You)\))?")
 CROSSLINK_RE = re.compile(r">>>/\w+/(?:\d+)?")
 BOARD_RE = re.compile(r"^[a-z0-9]{1,10}$")
 
+# --------------------------------------------------------------------------- #
+# Runtime mode: terminal, or driven by the GUI
+# --------------------------------------------------------------------------- #
+
+# The GUI runs this script as a child process with ACOPSIS_EVENTS=1. In that mode all
+# output becomes JSON event lines (prefixed) that the GUI renders natively, and the GUI
+# can ask for a graceful stop by creating the file named in ACOPSIS_STOP_FILE.
+EVENTS = os.environ.get("ACOPSIS_EVENTS") == "1"
+STOP_FILE = os.environ.get("ACOPSIS_STOP_FILE")
+EVENT_PREFIX = "@@ACO@@"
+RICH = RICH and not EVENTS
+
+for _stream in (sys.stdout, sys.stderr):  # Windows consoles default to cp1252
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
+
+def emit(kind: str, **data) -> None:
+    """Send a structured event to the GUI (no-op in terminal mode)."""
+    if EVENTS:
+        sys.stdout.write(EVENT_PREFIX + json.dumps({"t": kind, **data}, default=str, ensure_ascii=False) + "\n")
+        sys.stdout.flush()
+
+
+class StopRequested(Exception):
+    """Raised when the GUI asks a long-running job to stop."""
+
+
+def stop_requested() -> bool:
+    return bool(STOP_FILE) and os.path.exists(STOP_FILE)
+
+
+def check_stop() -> None:
+    if stop_requested():
+        raise StopRequested()
+
 
 # --------------------------------------------------------------------------- #
-# Console UI (rich if available, plain text otherwise)
+# Console UI (rich if available, plain text otherwise, JSON events for the GUI)
 # --------------------------------------------------------------------------- #
 
 console = Console() if RICH else None
 
 
-def _say(icon: str, style: str, msg: str) -> None:
-    if RICH:
+def _say(icon: str, style: str, level: str, msg: str) -> None:
+    if EVENTS:
+        emit("log", level=level, msg=str(msg))
+    elif RICH:
         console.print(f"[{style}]{icon}[/] {escape(str(msg))}", highlight=False)
     else:
-        print(f"{icon} {msg}")
+        print(f"{icon} {msg}", flush=True)
 
 
 def info(msg: str) -> None:
-    _say("•", "cyan", msg)
+    _say("•", "cyan", "info", msg)
 
 
 def ok(msg: str) -> None:
-    _say("✔", "green", msg)
+    _say("✔", "green", "ok", msg)
 
 
 def warn(msg: str) -> None:
-    _say("!", "yellow", msg)
+    _say("!", "yellow", "warn", msg)
 
 
 def error(msg: str) -> None:
-    _say("✘", "bold red", msg)
+    _say("✘", "bold red", "error", msg)
 
 
 def banner(title: str, subtitle: str = "") -> None:
-    if RICH:
+    if EVENTS:
+        emit("banner", title=title, subtitle=subtitle)
+    elif RICH:
         body = f"[bold]{escape(title)}[/]"
         if subtitle:
             body += f"\n[dim]{escape(subtitle)}[/]"
@@ -120,14 +172,18 @@ def banner(title: str, subtitle: str = "") -> None:
 
 
 def section(title: str) -> None:
-    if RICH:
+    if EVENTS:
+        emit("section", title=title)
+    elif RICH:
         console.rule(f"[bold]{escape(title)}[/]", style="dim")
     else:
         print(f"\n--- {title} ---")
 
 
 def panel(text: str, title: str = "", style: str = "cyan") -> None:
-    if RICH:
+    if EVENTS:
+        emit("panel", title=title, text=text, style=style)
+    elif RICH:
         console.print(Panel(
             escape(text), title=escape(title) if title else None,
             title_align="left", border_style=style,
@@ -137,7 +193,9 @@ def panel(text: str, title: str = "", style: str = "cyan") -> None:
 
 
 def kv_table(title: str, rows: list[tuple[str, object]]) -> None:
-    if RICH:
+    if EVENTS:
+        emit("table", title=title, rows=[[str(k), str(v)] for k, v in rows])
+    elif RICH:
         table = Table(title=title, box=box.ROUNDED, show_header=False, title_style="bold")
         table.add_column(style="cyan", no_wrap=True)
         table.add_column(style="white")
@@ -151,15 +209,23 @@ def kv_table(title: str, rows: list[tuple[str, object]]) -> None:
 
 
 class _PlainBar:
+    """Plain-text progress: prints at most every couple of seconds."""
+
     def __init__(self, desc: str, total: int):
         self.desc, self.total, self.n = desc, total, 0
+        self._status, self._last = "", 0.0
 
-    def advance(self, n: int = 1, status: str = "") -> None:
+    def advance(self, n: int = 1, status: str | None = None) -> None:
         self.n += n
-        print(f"  [{self.n}/{self.total}] {self.desc} {status}".rstrip())
+        if status is not None:
+            self._status = status
+        now = time.monotonic()
+        if now - self._last >= 2.0 or self.n >= self.total:
+            self._last = now
+            print(f"  [{self.n:,}/{self.total:,}] {self.desc} {self._status}".rstrip(), flush=True)
 
     def status(self, text: str) -> None:
-        pass
+        self._status = text
 
 
 class _RichBar:
@@ -174,8 +240,50 @@ class _RichBar:
         self._p.update(self._t, status=escape(text))
 
 
+_BAR_IDS = itertools.count(1)
+
+
+class _EventBar:
+    """Progress for the GUI: throttled JSON events."""
+
+    def __init__(self, desc: str, total: int):
+        self.id, self.desc, self.total, self.n = next(_BAR_IDS), desc, total, 0
+        self._status, self._last = "", 0.0
+        self._send(done=False)
+
+    def _send(self, done: bool) -> None:
+        emit("progress", id=self.id, desc=self.desc, n=self.n, total=self.total,
+             status=self._status, done=done)
+
+    def _maybe(self) -> None:
+        now = time.monotonic()
+        if now - self._last >= 0.25:
+            self._last = now
+            self._send(done=False)
+
+    def advance(self, n: int = 1, status: str | None = None) -> None:
+        self.n += n
+        if status is not None:
+            self._status = status
+        self._maybe()
+
+    def status(self, text: str) -> None:
+        self._status = text
+        self._maybe()
+
+    def close(self) -> None:
+        self._send(done=True)
+
+
 @contextmanager
 def progress(desc: str, total: int):
+    if EVENTS:
+        bar = _EventBar(desc, total)
+        try:
+            yield bar
+        finally:
+            bar.close()
+        return
     if not RICH:
         yield _PlainBar(desc, total)
         return
@@ -328,7 +436,7 @@ def collect(boards, max_threads, min_length=20, delay=1.1):
 
     api = FourChanAPI(delay=delay)
     rng = random.Random()
-    stats = {"threads": 0, "posts": 0, "failed": 0, "gone": 0}
+    totals = {"threads": 0, "posts": 0, "failed": 0, "gone": 0}
 
     try:
         with (
@@ -336,6 +444,7 @@ def collect(boards, max_threads, min_length=20, delay=1.1):
             THREADS_FILE.open("a", encoding="utf-8") as archive,
         ):
             for board in boards:
+                check_stop()
                 section(f"/{board}/")
                 try:
                     catalog = api.get_json(f"{board}/catalog.json")
@@ -362,16 +471,17 @@ def collect(boards, max_threads, min_length=20, delay=1.1):
 
                 with progress(f"/{board}/", len(candidates)) as bar:
                     for thread_id in candidates:
+                        check_stop()
                         try:
                             data = api.get_json(f"{board}/thread/{thread_id}.json")
                         except (requests.RequestException, ValueError) as exc:
                             warn(f"Thread {thread_id} failed: {exc}")
-                            stats["failed"] += 1
+                            totals["failed"] += 1
                             bar.advance()
                             continue
 
                         if data is None:
-                            stats["gone"] += 1
+                            totals["gone"] += 1
                             bar.advance(status=f"thread {thread_id} gone")
                             continue
 
@@ -386,17 +496,17 @@ def collect(boards, max_threads, min_length=20, delay=1.1):
                         archive.flush()
 
                         seen_threads.add((board, thread_id))
-                        stats["threads"] += 1
-                        stats["posts"] += new_posts
+                        totals["threads"] += 1
+                        totals["posts"] += new_posts
                         bar.advance(status=f"thread {thread_id} · {len(posts)} posts · +{new_posts} new")
-    except KeyboardInterrupt:
-        warn("Interrupted. Everything collected so far has been saved.")
+    except (KeyboardInterrupt, StopRequested):
+        warn("Stopped. Everything collected so far has been saved.")
 
     kv_table("Collection summary", [
-        ("New threads archived", f"{stats['threads']:,}"),
-        ("New training posts", f"{stats['posts']:,}"),
-        ("Threads gone (404)", stats["gone"]),
-        ("Threads failed", stats["failed"]),
+        ("New threads archived", f"{totals['threads']:,}"),
+        ("New training posts", f"{totals['posts']:,}"),
+        ("Threads gone (404)", totals["gone"]),
+        ("Threads failed", totals["failed"]),
         ("Training corpus", DATA_FILE),
         ("Thread archive", THREADS_FILE),
     ])
@@ -422,15 +532,49 @@ def holdout(items, frac: float, rng: random.Random):
     return items[k:], items[:k]
 
 
-def encode_docs(tokenizer, texts: list[str]):
-    """Tokenize documents; each one ends with EOS. Returns a list of int32 arrays."""
+EOS_CANDIDATES = ("<|end_of_text|>", "<|endoftext|>", "</s>", "<|im_end|>", "<eos>")
+
+
+def resolve_eos(tokenizer, override: str | None = None) -> tuple[int, str]:
+    """Pick the document-separator token: explicit override > tokenizer's own EOS > common names."""
+    unk = getattr(tokenizer, "unk_token_id", None)
+
+    def lookup(token: str):
+        tid = tokenizer.convert_tokens_to_ids(token)
+        return None if tid is None or tid == unk else int(tid)
+
+    if override:
+        tid = lookup(override)
+        if tid is None:
+            raise ValueError(f"EOS token {override!r} is not in the tokenizer's vocabulary")
+        return tid, override
+    if tokenizer.eos_token_id is not None:
+        return int(tokenizer.eos_token_id), str(tokenizer.eos_token)
+    for token in EOS_CANDIDATES:
+        tid = lookup(token)
+        if tid is not None:
+            return tid, token
+    raise ValueError("Could not determine an EOS token; pass --eos-token")
+
+
+def context_length(config, default: int = 2048) -> int:
+    """Best-effort maximum sequence length of a model config."""
+    for key in ("max_position_embeddings", "n_positions", "max_seq_len", "seq_length", "max_sequence_length"):
+        value = getattr(config, key, None)
+        if isinstance(value, int) and value > 0:
+            return value
+    return default
+
+
+def encode_docs(tokenizer, texts: list[str], eos_id: int):
+    """Tokenize documents; each one ends with `eos_id`. Returns a list of int32 arrays."""
     import numpy as np
 
-    eos = tokenizer.eos_token_id
     docs = []
     for i in range(0, len(texts), 2000):
+        # add_special_tokens=False: no BOS/EOS surprises, only our own separator.
         for ids in tokenizer(texts[i:i + 2000], add_special_tokens=False)["input_ids"]:
-            docs.append(np.asarray(ids + [eos], dtype=np.int32))
+            docs.append(np.asarray(list(ids) + [eos_id], dtype=np.int32))
     return docs
 
 
@@ -461,6 +605,7 @@ def _base_texts(spec: dict, cache: Path):
         ds = ds.skip(last + 1)
     with cache.open("a", encoding="utf-8") as f:
         for i, row in enumerate(ds, start=last + 1):
+            check_stop()
             text = (row.get(spec["field"]) or "").strip()
             if len(text) < spec.get("min_chars", 200) or text.startswith("="):
                 continue
@@ -469,7 +614,7 @@ def _base_texts(spec: dict, cache: Path):
             yield text
 
 
-def fetch_base_tokens(source: str, budget: int, tokenizer):
+def fetch_base_tokens(source: str, budget: int, tokenizer, eos_id: int):
     """Return a flat int32 token stream (docs joined by EOS) of up to `budget` tokens."""
     import numpy as np
 
@@ -483,7 +628,7 @@ def fetch_base_tokens(source: str, budget: int, tokenizer):
     def flush():
         nonlocal total
         added = 0
-        for arr in encode_docs(tokenizer, batch):
+        for arr in encode_docs(tokenizer, batch, eos_id):
             parts.append(arr)
             added += arr.size
         batch.clear()
@@ -635,14 +780,23 @@ def train(a):
     # hybrid blocks can break autograd ("modified by an inplace operation").
     config.use_cache = False
     apply_overrides(config, a.set)
-    if tokenizer.pad_token is None:  # Pythia ships without one
+
+    # Document separator: --eos-token > the tokenizer's own EOS > common names.
+    eos_id, eos_tok = resolve_eos(tokenizer, a.eos_token)
+    if a.eos_token or tokenizer.eos_token is None:
+        tokenizer.eos_token = eos_tok
+    if tokenizer.pad_token is None:  # many tokenizers ship without one
         tokenizer.pad_token = tokenizer.eos_token
-    block_size = min(a.block_size, config.max_position_embeddings)
+    config.eos_token_id = eos_id  # generation should stop on the token we trained with
+    ctx = context_length(config)
+    if a.block_size > ctx:
+        warn(f"--block-size {a.block_size} exceeds the model context ({ctx}); using {ctx}")
+    block_size = min(a.block_size, ctx)
 
     # ---- token budgets: base corpus (fluency) + forum (voice) -------------- #
-    forum_docs = encode_docs(tokenizer, forum_train)
+    forum_docs = encode_docs(tokenizer, forum_train, eos_id)
     forum_tokens = int(sum(d.size for d in forum_docs))
-    forum_eval_blocks = pack_blocks(encode_docs(tokenizer, forum_eval), block_size)
+    forum_eval_blocks = pack_blocks(encode_docs(tokenizer, forum_eval, eos_id), block_size)
     if forum_tokens < block_size:
         raise ValueError("Forum text is shorter than one block. Collect more data.")
 
@@ -658,7 +812,7 @@ def train(a):
             replay = a.base_tokens
         eval_tokens = max(block_size * 32, min(100_000, a.base_tokens // 100))
         try:
-            stream = fetch_base_tokens(a.base_corpus, a.base_tokens + eval_tokens, tokenizer)
+            stream = fetch_base_tokens(a.base_corpus, a.base_tokens + eval_tokens, tokenizer, eos_id)
         except Exception as exc:  # offline, bad dataset id, etc.
             warn(f"Could not load base corpus '{a.base_corpus}' ({exc}); using forum text only")
             stream = np.empty(0, dtype=np.int32)
@@ -749,7 +903,8 @@ def train(a):
         ("Memory estimate", f"≈ {n_params * 16 / 1e9:.1f} GB weights+grads+Adam, plus activations"),
         ("Device", gpu),
         ("Precision", precision + (" (auto)" if a.precision == "auto" else "")),
-        ("Block size", block_size),
+        ("EOS token", f"{eos_tok} (id {eos_id})"),
+        ("Block size", f"{block_size} (model context {ctx})"),
         ("Train blocks", f"{len(train_data):,}  ({len(base_warm):,} base warm-up → {len(phase_two):,} mixed)"),
         ("Eval blocks", ", ".join(f"{k} {len(v):,}" for k, v in eval_sets.items()) or "none"),
         ("Forum", f"{forum_tokens:,} tokens × {reps} epochs"),
@@ -804,7 +959,7 @@ def train(a):
         dataloader_num_workers=0,
         dataloader_pin_memory=cuda,
         logging_nan_inf_filter=False,
-        disable_tqdm=RICH,  # our rich bar replaces it
+        disable_tqdm=True,  # our own progress UI replaces it
         seed=a.seed,
         **{eval_key: "steps" if has_eval else "no"},
     )
@@ -845,6 +1000,8 @@ def train(a):
         def on_log(self, args, state, control, logs=None, **kw):
             if logs and "loss" in logs:
                 self.bar.status(f"loss {logs['loss']:.3f} · lr {logs.get('learning_rate', 0):.1e}")
+                emit("metric", step=state.global_step, max_steps=state.max_steps,
+                     loss=logs["loss"], lr=logs.get("learning_rate"), epoch=logs.get("epoch"))
 
         def on_evaluate(self, args, state, control, metrics=None, **kw):
             parts = [
@@ -854,6 +1011,9 @@ def train(a):
             ]
             if parts:
                 info(f"step {state.global_step}: eval loss · " + " · ".join(parts))
+                emit("eval", step=state.global_step,
+                     losses={k[5:-5] or "eval": v for k, v in metrics.items()
+                             if k.startswith("eval_") and k.endswith("_loss")})
 
         def close(self):
             if self._cm is not None:
@@ -872,8 +1032,16 @@ def train(a):
             except Exception as exc:  # never let sampling kill a run
                 warn(f"Sampling failed: {exc}")
 
+    class StopCallback(TrainerCallback):
+        """Graceful stop requested from the GUI: finish the step, then save and exit."""
+
+        def on_step_end(self, args, state, control, **kw):
+            if stop_requested():
+                control.should_training_stop = True
+                warn("Stop requested; finishing this step, then saving...")
+
     callback = RichProgress()
-    callbacks = [callback] if RICH else []
+    callbacks = [callback, StopCallback()]
     if a.sample_prompt is not None:
         callbacks.append(SampleCallback())
     if a.patience > 0:
@@ -999,21 +1167,28 @@ def sample_text(model, tokenizer, prompt, max_new_tokens=100, temperature=0.8, t
     import torch
 
     device = next(model.parameters()).device
-    inputs = tokenizer(prompt or tokenizer.eos_token, return_tensors="pt").to(device)
+    # add_special_tokens=False matches how training text was tokenized (no BOS).
+    inputs = tokenizer(prompt or tokenizer.eos_token or " ", return_tensors="pt",
+                       add_special_tokens=False).to(device)
+    eos = tokenizer.eos_token_id
+    pad = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else eos
+    extra = {} if eos is None else {"eos_token_id": eos}
+    if inputs.get("attention_mask") is not None:
+        extra["attention_mask"] = inputs["attention_mask"]
     was_training = model.training
     model.eval()
     try:
         with torch.no_grad():
             out = model.generate(
                 input_ids=inputs["input_ids"],
-                attention_mask=inputs["attention_mask"],
                 max_new_tokens=max_new_tokens,
                 use_cache=True,  # config has it off for training; sampling wants it on
                 do_sample=True,
                 temperature=temperature,
                 top_p=top_p,
                 repetition_penalty=1.1,
-                pad_token_id=tokenizer.eos_token_id,
+                pad_token_id=pad,
+                **extra,
             )
     finally:
         if was_training:
@@ -1044,6 +1219,30 @@ def generate(a):
     def run(prompt):
         panel(sample_text(model, tokenizer, prompt, a.max_new_tokens, a.temperature, a.top_p), "output")
 
+    if a.serve:  # used by the GUI: keep the model loaded, answer JSON requests on stdin
+        emit("ready", device=device)
+        while True:
+            line = sys.stdin.readline()
+            if not line:
+                break
+            try:
+                req = json.loads(line)
+            except ValueError:
+                continue
+            if req.get("cmd") == "quit":
+                break
+            try:
+                text = sample_text(
+                    model, tokenizer, req.get("prompt", ""),
+                    int(req.get("max_new_tokens", a.max_new_tokens)),
+                    float(req.get("temperature", a.temperature)),
+                    float(req.get("top_p", a.top_p)),
+                )
+                emit("gen", id=req.get("id"), text=text)
+            except Exception as exc:  # keep the server alive after a bad request
+                emit("gen_error", id=req.get("id"), msg=str(exc))
+        return
+
     if not a.interactive:
         run(a.prompt)
         return
@@ -1071,6 +1270,90 @@ def generate(a):
                 warn(f"Bad value: {value!r}")
             continue
         run(prompt)
+
+
+# --------------------------------------------------------------------------- #
+# Environment check
+# --------------------------------------------------------------------------- #
+
+def doctor(a):
+    from importlib import metadata
+
+    banner("ACOpsis · doctor", "environment check")
+
+    def version(dist: str):
+        try:
+            return metadata.version(dist)
+        except metadata.PackageNotFoundError:
+            return None
+
+    rows = [
+        ("Python", f"{platform.python_version()} ({platform.system()} {platform.machine()})"),
+        ("Working directory", Path.cwd()),
+    ]
+    missing = []
+    for label, required in [("numpy", True), ("torch", True), ("transformers", True), ("datasets", True),
+                            ("tokenizers", True), ("requests", True), ("beautifulsoup4", True),
+                            ("rich", False), ("PyQt6", False)]:
+        found = version(label)
+        rows.append((label, found or ("not installed" + ("" if required else " (optional)"))))
+        if found is None and required:
+            missing.append(label)
+
+    cpu_only = False
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            props = torch.cuda.get_device_properties(0)
+            rows += [
+                ("GPU", f"{props.name} · {props.total_memory / 1e9:.1f} GB"),
+                ("Compute capability", f"{props.major}.{props.minor}"),
+                ("CUDA (torch build)", torch.version.cuda),
+                ("bf16", "native" if props.major >= 8 else "not native on this GPU"),
+            ]
+        else:
+            cpu_only = torch.version.cuda is None
+            rows.append(("GPU", "none usable (training on CPU is very slow)"))
+    except Exception as exc:
+        rows.append(("torch import", f"failed: {exc}"))
+
+    try:
+        rows.append(("Free disk space", f"{shutil.disk_usage(Path.cwd()).free / 1e9:.1f} GB"))
+    except OSError:
+        pass
+    corpus_posts = sum(1 for _ in load_jsonl(DATA_FILE))
+    rows.append(("Forum corpus", f"{corpus_posts:,} posts" if corpus_posts else "none yet (run collect)"))
+    kv_table("Environment", rows)
+
+    if cpu_only:
+        warn("This PyTorch build has no CUDA support. Install the CUDA build from https://pytorch.org/get-started/locally/")
+    if sys.version_info >= (3, 14):
+        warn("Python 3.14 is very new; if torch/datasets fail to install or import, use Python 3.12 or 3.13.")
+    if missing:
+        warn("Missing packages: pip install " + " ".join(missing))
+    elif not cpu_only:
+        ok("Core dependencies look fine.")
+
+
+def launch_gui(parser=None) -> int:
+    gui_path = Path(__file__).resolve().parent / "gui.py"
+    try:
+        import PyQt6  # noqa: F401
+    except ImportError:
+        error("PyQt6 is not installed. Run:  pip install PyQt6")
+        if parser is not None:
+            parser.print_help()
+        return 1
+    if not gui_path.exists():
+        error(f"gui.py not found next to train.py ({gui_path})")
+        return 1
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("acopsis_gui", gui_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.main()
 
 
 # --------------------------------------------------------------------------- #
@@ -1122,7 +1405,7 @@ def apply_overrides(config, pairs):
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    sub = parser.add_subparsers(dest="mode", required=True)
+    sub = parser.add_subparsers(dest="mode")  # no subcommand = open the GUI
 
     c = sub.add_parser("collect", help="download threads into the corpus")
     c.add_argument("--boards", nargs="+", type=board_name, default=DEFAULT_BOARDS)
@@ -1134,6 +1417,8 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--model", type=model_id, default=MODEL_CONFIG,
                    help="HF repo to copy the architecture/tokenizer from (weights are NOT loaded), "
                         "e.g. LiquidAI/LFM3-1.7B")
+    t.add_argument("--eos-token", default=None, metavar="TOKEN",
+                   help="document separator token, e.g. \"<|end_of_text|>\" (default: the tokenizer's own EOS)")
     t.add_argument("--epochs", type=int, default=1,
                    help="passes over the whole curriculum (forum repetition is --forum-repeat)")
     t.add_argument("--trust-remote-code", action="store_true",
@@ -1176,6 +1461,7 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--trust-remote-code", action="store_true",
                    help="allow executing custom modeling code from the model repo (inspect it first)")
     g.add_argument("-i", "--interactive", action="store_true", help="prompt loop; model loads once")
+    g.add_argument("--serve", action="store_true", help="JSON-lines server on stdin/stdout (used by the GUI)")
     g.add_argument("--top-p", type=float, default=0.9)
     g.add_argument("--seed", type=int, default=None, help="make sampling reproducible")
     g.add_argument("--max-new-tokens", type=int, default=120)
@@ -1187,19 +1473,31 @@ def build_parser() -> argparse.ArgumentParser:
                    help="allow executing custom modeling code from the model repo (inspect it first)")
     st.add_argument("--model", type=model_id, default=None, help="tokenizer repo for exact token counts")
 
+    sub.add_parser("doctor", help="check Python, packages, GPU and disk")
+    sub.add_parser("gui", help="open the graphical control panel (needs PyQt6)")
+
     return parser
 
 
 def main():
-    a = build_parser().parse_args()
-    if a.mode == "collect":
-        collect(a.boards, max(1, a.max_threads), a.min_length, max(1.0, a.delay))
-    elif a.mode == "train":
-        train(a)
-    elif a.mode == "stats":
-        stats(a)
-    else:
-        generate(a)
+    parser = build_parser()
+    a = parser.parse_args()
+    try:
+        if a.mode in (None, "gui"):
+            sys.exit(launch_gui(parser if a.mode is None else None))
+        elif a.mode == "collect":
+            collect(a.boards, max(1, a.max_threads), a.min_length, max(1.0, a.delay))
+        elif a.mode == "train":
+            train(a)
+        elif a.mode == "stats":
+            stats(a)
+        elif a.mode == "doctor":
+            doctor(a)
+        else:
+            generate(a)
+    except (KeyboardInterrupt, StopRequested):
+        warn("Stopped.")
+        sys.exit(130)
 
 
 if __name__ == "__main__":
