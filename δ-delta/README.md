@@ -8,8 +8,14 @@ Delta requires multiple python libraries which include:
 - beautifulsoup4
 - urllib3
 - rich (optional but recomended)
+- PyQt6 (Required for GUI, CLI does not requiire)
+- Torch
 ```
-python -m pip install requests beautifulsoup4 urllib3 rich
+python -m pip install requests beautifulsoup4 urllib3 torch
+```
+or for optional dependencies
+```
+python -m pip install requests beautifulsoup4 urllib3 torch rich PyQt6
 ```
 # Info & Help
 ## Setup
